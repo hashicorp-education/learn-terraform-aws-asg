@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: MPL-2.0
 
 provider "aws" {
-  region = "us-east-2"
+  region = "us-east-1"
 
   default_tags {
     tags = {
@@ -34,20 +34,22 @@ data "aws_ami" "amazon-linux" {
 
   filter {
     name   = "name"
-    values = ["amzn-ami-hvm-*-x86_64-ebs"]
+    values = ["amzn-ami-*"]
   }
 }
 
-resource "aws_launch_configuration" "terramino" {
-  name_prefix     = "learn-terraform-aws-asg-"
-  image_id        = data.aws_ami.amazon-linux.id
-  instance_type   = "t2.micro"
-  user_data       = file("user-data.sh")
-  security_groups = [aws_security_group.terramino_instance.id]
+resource "aws_launch_template" "terramino" {
+  name_prefix = "learn-terraform-aws-asg-"
+  image_id = data.aws_ami.amazon-linux.id
+  instance_type = "t2.micro"
+  user_data = base64encode(file("user-data.sh"))
+  vpc_security_group_ids = [aws_security_group.terramino_instance.id]
 
-  lifecycle {
-    create_before_destroy = true
-  }
+  # Optional: You can specify additional settings like key_name, monitoring, etc.
+  # key_name = "your_key_name"
+  # lifecycle {
+  #   create_before_destroy = true
+  # }
 }
 
 resource "aws_autoscaling_group" "terramino" {
@@ -55,7 +57,10 @@ resource "aws_autoscaling_group" "terramino" {
   min_size             = 1
   max_size             = 3
   desired_capacity     = 1
-  launch_configuration = aws_launch_configuration.terramino.name
+  launch_template {
+    id      = aws_launch_template.terramino.id
+    version = aws_launch_template.terramino.latest_version
+  }
   vpc_zone_identifier  = module.vpc.public_subnets
 
   health_check_type    = "ELB"
